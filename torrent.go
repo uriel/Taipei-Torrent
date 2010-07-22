@@ -142,13 +142,15 @@ type TorrentSession struct {
 	goodPieces      int
 	activePieces    map[int]*ActivePiece
 	lastHeartBeat   int64
+	globalStatus    *GlobalStatus
 }
 
-func NewTorrentSession(torrent string, listenPort int) (ts *TorrentSession, err os.Error) {
+func NewTorrentSession(torrent string, listenPort int, gs *GlobalStatus) (ts *TorrentSession, err os.Error) {
 
 	t := &TorrentSession{peers: make(map[string]*peerState),
 		peerMessageChan: make(chan peerMessage),
-		activePieces:    make(map[int]*ActivePiece)}
+		activePieces:    make(map[int]*ActivePiece),
+		globalStatus:    gs}
 	t.m, err = getMetaInfo(torrent)
 	if err != nil {
 		return
@@ -281,6 +283,8 @@ func (t *TorrentSession) DoTorrent(listenPort int) (err os.Error) {
 
 	for {
 		select {
+		case t.globalStatus.webSessionInfo <- *t.si:
+			continue
 		case _ = <-retrackerChan:
 			t.fetchTrackerInfo("")
 		case ti := <-t.trackerInfoChan:
@@ -305,7 +309,6 @@ func (t *TorrentSession) DoTorrent(listenPort int) (err os.Error) {
 			}
 			log.Stderr("..checking again in", interval, "seconds.")
 			retrackerChan = time.Tick(int64(interval) * NS_PER_S)
-
 		case pm := <-t.peerMessageChan:
 			peer, message := pm.peer, pm.message
 			peer.lastReadTime = time.Seconds()

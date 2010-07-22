@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha1"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"jackpal/http"
@@ -127,6 +128,12 @@ type SessionInfo struct {
 	Uploaded   int64
 	Downloaded int64
 	Left       int64
+}
+
+// TODO: Use a proper web template.
+func (ssi *SessionInfo) String() string {
+	return fmt.Sprintf("Stats: Uploaded=%d, Downloaded=%d, Left=%d, PeerId=%v, Port=%d",
+		ssi.Uploaded, ssi.Downloaded, ssi.Left, ssi.PeerId, ssi.Port)
 }
 
 func getTrackerInfo(url string) (tr *TrackerResponse, err os.Error) {

@@ -12,6 +12,7 @@ GOFILES=\
 	peer.go \
 	testBencode.go \
 	torrent.go \
+	webstatus.go \
 	upnp.go
 
 include $(GOROOT)/src/Make.cmd
