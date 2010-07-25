@@ -75,7 +75,8 @@ func NewFileStore(info *InfoDict, fileDir string) (f FileStore, totalSize int64,
 	fs.offsets = make([]int64, numFiles)
 	for i, _ := range info.Files {
 		src := &info.Files[i]
-		torrentPath, err := createPath(src.Path)
+		var torrentPath string
+		torrentPath, err = createPath(src.Path)
 		if err != nil {
 			return
 		}
@@ -124,7 +125,8 @@ func (f *fileStore) ReadAt(p []byte, off int64) (n int, err os.Error) {
 				chunk = space
 			}
 			fd := entry.fd
-			nThisTime, err := fd.ReadAt(p[0:chunk], itemOffset)
+			var nThisTime int
+			nThisTime, err = fd.ReadAt(p[0:chunk], itemOffset)
 			n = n + nThisTime
 			if err != nil {
 				return
@@ -154,7 +156,8 @@ func (f *fileStore) WriteAt(p []byte, off int64) (n int, err os.Error) {
 				chunk = space
 			}
 			fd := entry.fd
-			nThisTime, err := fd.WriteAt(p[0:chunk], itemOffset)
+			var nThisTime int
+			nThisTime, err = fd.WriteAt(p[0:chunk], itemOffset)
 			n += nThisTime
 			if err != nil {
 				return
