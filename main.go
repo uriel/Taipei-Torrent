@@ -18,10 +18,15 @@ func main() {
 	// testUPnP()
 	flag.Parse()
 	log.Stderr("Starting.")
-	webStatus := &GlobalStatus{webSessionInfo: make(chan SessionInfo)}
+
 	// Auxiliary web server. Currently only displays session stats.
+	syncStatus := &GlobalStatusSync{
+		webSessionInfo: make(chan SessionInfo),
+		webMetaInfo:    make(chan MetaInfo),
+	}
+	webServer := &webTorrentStats{syncStatus}
 	if *webStatusPort != "" {
-		http.Handle("/", webStatus)
+		http.Handle("/", webServer)
 		log.Stderrf("Starting web status server at %s", *webStatusPort)
 		go http.ListenAndServe(*webStatusPort, nil)
 	}
@@ -31,7 +36,7 @@ func main() {
 	if err != nil {
 		log.Stderr("Could not choose listen port. Peer connectivity will be affected.")
 	}
-	ts, err := NewTorrentSession(*torrent, listenPort, webStatus)
+	ts, err := NewTorrentSession(*torrent, listenPort, syncStatus)
 	if err != nil {
 		log.Stderr("Could not create torrent session.", err)
 		return

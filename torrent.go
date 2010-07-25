@@ -143,10 +143,10 @@ type TorrentSession struct {
 	goodPieces      int
 	activePieces    map[int]*ActivePiece
 	lastHeartBeat   int64
-	globalStatus    *GlobalStatus
+	globalStatus    *GlobalStatusSync
 }
 
-func NewTorrentSession(torrent string, listenPort int, gs *GlobalStatus) (ts *TorrentSession, err os.Error) {
+func NewTorrentSession(torrent string, listenPort int, gs *GlobalStatusSync) (ts *TorrentSession, err os.Error) {
 
 	t := &TorrentSession{peers: make(map[string]*peerState),
 		peerMessageChan: make(chan peerMessage),
@@ -173,6 +173,7 @@ func NewTorrentSession(torrent string, listenPort int, gs *GlobalStatus) (ts *To
 
 	log.Stderr("Computing pieces left")
 	start := time.Nanoseconds()
+	// TODO: Async so the web interface starts responding already.
 	good, bad, pieceSet, err := checkPieces(t.fileStore, totalSize, t.m)
 	end := time.Nanoseconds()
 	log.Stderr("Took", float64(end-start)/float64(NS_PER_S), "seconds")
@@ -286,6 +287,9 @@ func (t *TorrentSession) DoTorrent(listenPort int) (err os.Error) {
 		select {
 		case t.globalStatus.webSessionInfo <- *t.si:
 			continue
+		case t.globalStatus.webMetaInfo <- *t.m:
+			continue
+		case _ = <-retrackerChan:
 		case _ = <-retrackerChan:
 			t.fetchTrackerInfo("")
 		case ti := <-t.trackerInfoChan:

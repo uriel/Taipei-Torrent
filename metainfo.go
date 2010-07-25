@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/sha1"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"jackpal/http"
@@ -53,7 +52,6 @@ func getString(m map[string]interface{}, k string) string {
 func getMetaInfo(torrent string) (metaInfo *MetaInfo, err os.Error) {
 	var input io.ReadCloser
 	if strings.HasPrefix(torrent, "http:") {
-		// 6g compiler bug prevents us from writing r, _, err :=
 		var r *http.Response
 		if r, _, err = http.Get(torrent); err != nil {
 			return
@@ -130,12 +128,6 @@ type SessionInfo struct {
 	Left       int64
 }
 
-// TODO: Use a proper web template.
-func (ssi *SessionInfo) String() string {
-	return fmt.Sprintf("Stats: Uploaded=%d, Downloaded=%d, Left=%d, PeerId=%v, Port=%d",
-		ssi.Uploaded, ssi.Downloaded, ssi.Left, ssi.PeerId, ssi.Port)
-}
-
 func getTrackerInfo(url string) (tr *TrackerResponse, err os.Error) {
 	r, _, err := http.Get(url)
 	if err != nil {
@@ -157,4 +149,12 @@ func getTrackerInfo(url string) (tr *TrackerResponse, err os.Error) {
 	}
 	tr = &tr2
 	return
+}
+
+// GlobalStatus provides channels for communication of the built-in web server
+// with the main torrent engine. Only TorrentSession.DoTorrent() should write
+// to the channels.
+type GlobalStatusSync struct {
+	webSessionInfo chan SessionInfo
+	webMetaInfo    chan MetaInfo
 }
