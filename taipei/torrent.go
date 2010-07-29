@@ -3,6 +3,7 @@ package taipei
 import (
 	"bytes"
 	"crypto/sha1"
+	"flag"
 	"fmt"
 	"jackpal/http"
 	"log"
@@ -33,10 +34,17 @@ const (
 	PORT // Not implemented. For DHT support.
 )
 
+
 // Should be overriden by flag. Not thread safe.
-var Port *int
-var UseUPnP *bool
-var FileDir *string
+var port int
+var useUPnP bool
+var fileDir string
+
+func init() {
+	flag.StringVar(&fileDir, "fileDir", ".", "path to directory where files are stored")
+	flag.IntVar(&port, "port", 0, "Port to listen on. Defaults to random.")
+	flag.BoolVar(&useUPnP, "useUPnP", false, "Use UPnP to open port in firewall.")
+}
 
 func peerId() string {
 	sid := "-tt" + strconv.Itoa(os.Getpid()) + "_" + strconv.Itoa64(rand.Int63())
@@ -49,8 +57,8 @@ func binaryToDottedPort(port string) string {
 }
 
 func chooseListenPort() (listenPort int, err os.Error) {
-	listenPort = *Port
-	if *UseUPnP {
+	listenPort = port
+	if useUPnP {
 		log.Stderr("Using UPnP to open port.")
 		// TODO: Look for ports currently in use. Handle collisions.
 		var nat NAT
@@ -187,7 +195,7 @@ func NewTorrentSession(torrent string) (ts *TorrentSession, err os.Error) {
 		return
 	}
 
-	fileStore, totalSize, err := NewFileStore(&t.m.Info, *FileDir)
+	fileStore, totalSize, err := NewFileStore(&t.m.Info, fileDir)
 	if err != nil {
 		return
 	}
