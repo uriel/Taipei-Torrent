@@ -1,4 +1,4 @@
-package main
+package taipei
 
 import (
 	"bytes"
@@ -33,6 +33,11 @@ const (
 	PORT // Not implemented. For DHT support.
 )
 
+// Should be overriden by flag. Not thread safe.
+var Port *int
+var UseUPnP *bool
+var FileDir *string
+
 func peerId() string {
 	sid := "-tt" + strconv.Itoa(os.Getpid()) + "_" + strconv.Itoa64(rand.Int63())
 	return sid[0:20]
@@ -44,8 +49,8 @@ func binaryToDottedPort(port string) string {
 }
 
 func chooseListenPort() (listenPort int, err os.Error) {
-	listenPort = *port
-	if *useUPnP {
+	listenPort = *Port
+	if *UseUPnP {
 		log.Stderr("Using UPnP to open port.")
 		// TODO: Look for ports currently in use. Handle collisions.
 		var nat NAT
@@ -161,8 +166,13 @@ type TorrentSession struct {
 	lastHeartBeat   int64
 }
 
-func NewTorrentSession(torrent string, listenPort int) (ts *TorrentSession, err os.Error) {
+func NewTorrentSession(torrent string) (ts *TorrentSession, err os.Error) {
 
+	var listenPort int;
+	if listenPort, err = chooseListenPort(); err != nil {
+		log.Stderr("Could not choose listen port.")
+		log.Stderr("Peer connectivity will be affed.")
+	}
 	t := &TorrentSession{peers: make(map[string]*peerState),
 		peerMessageChan: make(chan peerMessage),
 		activePieces:    make(map[int]*ActivePiece)}
@@ -177,7 +187,7 @@ func NewTorrentSession(torrent string, listenPort int) (ts *TorrentSession, err 
 		return
 	}
 
-	fileStore, totalSize, err := NewFileStore(&t.m.Info, *fileDir)
+	fileStore, totalSize, err := NewFileStore(&t.m.Info, *FileDir)
 	if err != nil {
 		return
 	}
@@ -253,6 +263,8 @@ func (t *TorrentSession) AddPeer(conn net.Conn) {
 	ps.address = peer
 	var header [68]byte
 	copy(header[0:], kBitTorrentHeader[0:])
+        // Next 8 reserved bytes are left zeroed. For advertising DHT support,
+        // the first byte would have the last bit set to 1.
 	copy(header[28:48], string2Bytes(t.m.InfoHash))
 	copy(header[48:68], string2Bytes(t.si.PeerId))
 
@@ -273,13 +285,13 @@ func (t *TorrentSession) deadlockDetector() {
 	for {
 		time.Sleep(60 * NS_PER_S)
 		if time.Seconds() > t.lastHeartBeat+60 {
-			log.Stderr("Starvation or deadlock of main thread detected")
+			log.Stderr("Starvation or deadlock of taipei thread detected")
 			panic("Killed by deadlock detector")
 		}
 	}
 }
 
-func (t *TorrentSession) DoTorrent(listenPort int) (err os.Error) {
+func (t *TorrentSession) DoTorrent() (err os.Error) {
 	t.lastHeartBeat = time.Seconds()
 	go t.deadlockDetector()
 	log.Stderr("Fetching torrent.")
@@ -345,7 +357,7 @@ func (t *TorrentSession) DoTorrent(listenPort int) (err os.Error) {
 			log.Stderr("Peers:", len(t.peers), "downloaded:", t.si.Downloaded,
 				"uploaded:", t.si.Uploaded, "ratio", ratio)
 			// TODO: Remove this hack when we support DHT and/or PEX
-			// In a large well-seeded swarm, try to maintain a reasonable number of peers.
+			// In a large well-seeded swarm, try to taipeitain a reasonable number of peers.
 			if len(t.peers) < 15 && t.goodPieces < t.totalPieces && (t.ti == nil || t.ti.Complete > 100) {
 				t.fetchTrackerInfo("")
 			}
