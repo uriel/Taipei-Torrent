@@ -19,9 +19,6 @@ func main() {
 	taipei.UseUPnP = flag.Bool("useUPnP", false, "Use UPnP to open port in firewall.")
 	flag.Parse()
 	log.Stderr("Starting.")
-	dht := &taipei.DhtNode{"abcdefghij0123456789"}
-	r, _ := dht.Ping()
-	log.Stderr("DHT: ", r)
 	ts, err := taipei.NewTorrentSession(*torrent)
 	if err != nil {
 		log.Stderr("Could not create torrent session.", err)
