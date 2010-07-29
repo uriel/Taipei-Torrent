@@ -1,10 +1,9 @@
-package taipei
+package bencode
 
 import (
 	"bytes"
 	"fmt"
-	"jackpal/bencode"
-	"log"
+//	"jackpal/bencode"
 	"os"
 	"reflect"
 	"testing"
@@ -14,7 +13,7 @@ type any interface{}
 
 func checkMarshal(expected string, data any) (err os.Error) {
 	var b bytes.Buffer
-	if err = bencode.Marshal(&b, data); err != nil {
+	if err = Marshal(&b, data); err != nil {
 		return
 	}
 	s := b.String()
@@ -30,7 +29,7 @@ func check(expected string, data any) (err os.Error) {
 		return
 	}
 	b2 := bytes.NewBufferString(expected)
-	val, err := bencode.Decode(b2)
+	val, err := Decode(b2)
 	if err != nil {
 		err = os.NewError(fmt.Sprint("Failed decoding ", expected, " ", err))
 		return
@@ -193,7 +192,7 @@ func checkUnmarshal(expected string, data any) (err os.Error) {
 	dataValue := reflect.NewValue(data)
 	newOne := reflect.MakeZero(dataValue.Type())
 	buf := bytes.NewBufferString(expected)
-	if err = bencode.UnmarshalValue(buf, newOne); err != nil {
+	if err = UnmarshalValue(buf, newOne); err != nil {
 		return
 	}
 	if err = checkFuzzyEqualValue(dataValue, newOne); err != nil {
