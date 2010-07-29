@@ -3,10 +3,10 @@ package taipei
 import (
 	//"taipei"
 	"testing"
-	)
+)
 
 type pingTest struct {
-	in string // ignored
+	in  string // ignored
 	out string
 }
 

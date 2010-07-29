@@ -168,7 +168,7 @@ type TorrentSession struct {
 
 func NewTorrentSession(torrent string) (ts *TorrentSession, err os.Error) {
 
-	var listenPort int;
+	var listenPort int
 	if listenPort, err = chooseListenPort(); err != nil {
 		log.Stderr("Could not choose listen port.")
 		log.Stderr("Peer connectivity will be affed.")
@@ -263,8 +263,8 @@ func (t *TorrentSession) AddPeer(conn net.Conn) {
 	ps.address = peer
 	var header [68]byte
 	copy(header[0:], kBitTorrentHeader[0:])
-        // Next 8 reserved bytes are left zeroed. For advertising DHT support,
-        // the first byte would have the last bit set to 1.
+	// Next 8 reserved bytes are left zeroed. For advertising DHT support,
+	// the first byte would have the last bit set to 1.
 	copy(header[28:48], string2Bytes(t.m.InfoHash))
 	copy(header[48:68], string2Bytes(t.si.PeerId))
 

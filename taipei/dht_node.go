@@ -9,19 +9,19 @@ import (
 )
 
 type DhtNode struct {
-	PeerID	string
-//	transactionID int // incremented every time.
+	PeerID string
+	//	transactionID int // incremented every time.
 }
 
 func (n *DhtNode) Ping() (r string, err os.Error) {
-	var queryA = map[string] string {
-                       "id" : n.PeerID,
-               }
+	var queryA = map[string]string{
+		"id": n.PeerID,
+	}
 
 	var a bytes.Buffer
 	bencode.Marshal(&a, queryA)
 
-	var pingMessage = map[string] interface{} {
+	var pingMessage = map[string]interface{}{
 		"t": "aa", // "random" transaction id.
 		"y": "q",
 		"q": "ping",
@@ -40,13 +40,13 @@ func (n *DhtNode) Ping() (r string, err os.Error) {
 	}
 	return
 	//conn, err := net.Dial("udp", "", "router.bittorrent.com:6881")
-//	if _, err = conn.Write(b.Bytes()); err != nil {
-//		log.Stderr("conn error" + err.String())
-//		return
-//	}
-//	var r []byte
-//	if _, err = conn.Read(r); err != nil {
-//		log.Stderr("read error" + err.String())
-//	}
-//	log.Stderr("peer result", string(r))
+	//	if _, err = conn.Write(b.Bytes()); err != nil {
+	//		log.Stderr("conn error" + err.String())
+	//		return
+	//	}
+	//	var r []byte
+	//	if _, err = conn.Read(r); err != nil {
+	//		log.Stderr("read error" + err.String())
+	//	}
+	//	log.Stderr("peer result", string(r))
 }

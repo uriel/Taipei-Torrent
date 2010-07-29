@@ -1,9 +1,9 @@
 package main
 
 import (
-	"taipei"
 	"flag"
 	"log"
+	"taipei"
 )
 
 var torrent *string = flag.String("torrent", "", "URL or path to a torrent file")
