@@ -7,7 +7,6 @@ GOFILES=\
         files.go\
         metainfo.go\
         peer.go\
-        testbencode.go\
         torrent.go\
         upnp.go
 include $(GOROOT)/src/Make.pkg

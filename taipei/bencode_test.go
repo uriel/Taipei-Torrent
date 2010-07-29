@@ -1,11 +1,14 @@
 package taipei
 
-import "bytes"
-import "fmt"
-import "jackpal/bencode"
-import "log"
-import "os"
-import "reflect"
+import (
+	"bytes"
+	"fmt"
+	"jackpal/bencode"
+	"log"
+	"os"
+	"reflect"
+	"testing"
+)
 
 type any interface{}
 
@@ -183,12 +186,6 @@ func fuzzyEqualValue(a, b reflect.Value) bool {
 	return false
 }
 
-func checkError(err os.Error) {
-	if err != nil {
-		log.Stderr("Got error: ", err)
-	}
-}
-
 func checkUnmarshal(expected string, data any) (err os.Error) {
 	if err = checkMarshal(expected, data); err != nil {
 		return
@@ -210,8 +207,7 @@ type SVPair struct {
 	v any
 }
 
-func testDecode() {
-	log.Stderr("test testDecode")
+func TestDecode(t *testing.T) {
 	tests := []SVPair{
 		SVPair{"i0e", int64(0)},
 		SVPair{"i0e", 0},
@@ -228,9 +224,10 @@ func testDecode() {
 		SVPair{"d3:cati1e3:dogi2ee", map[string]any{"cat": 1, "dog": 2}},
 	}
 	for _, sv := range tests {
-		checkError(check(sv.s, sv.v))
+		if err := check(sv.s, sv.v); err != nil {
+			t.Error(err.String())
+		}
 	}
-	log.Stderr("testDecode done.")
 }
 
 type structA struct {
@@ -238,8 +235,7 @@ type structA struct {
 	B string "b"
 }
 
-func testUnmarshal() {
-	log.Stderr("test testUnmarshal")
+func TestUnmarshal(t *testing.T) {
 	tests := []SVPair{
 		SVPair{"i0e", int64(0)},
 		SVPair{"i0e", 0},
@@ -257,13 +253,8 @@ func testUnmarshal() {
 		SVPair{"d1:ai10e1:b3:fooe", structA{10, "foo"}},
 	}
 	for _, sv := range tests {
-		checkError(checkUnmarshal(sv.s, sv.v))
+		if err := checkUnmarshal(sv.s, sv.v); err != nil {
+			t.Error(err.String())
+		}
 	}
-	log.Stderr("testUnmarshal done")
-}
-
-func testBencode() {
-	testUnmarshal()
-	testDecode()
-	testUnmarshal()
 }
