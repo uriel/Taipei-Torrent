@@ -1,11 +1,17 @@
-package main
+package taipei
 
 import (
+	"flag"
 	"fmt"
 	"http"
 	"log"
 	"template"
 )
+var webStatusPort string
+
+func init() {
+        flag.StringVar(&webStatusPort, "webStatusPort", "", "Enable web server to show transmission status on this address (e.g: 127.0.0.1:9999)")
+}
 
 type stats struct {
 	ssi *SessionInfo // Local ephemerous copy.Owned by ServeHTTP.
@@ -31,6 +37,21 @@ func (w *webTorrentStats) ServeHTTP(c *http.Conn, req *http.Request) {
 		s.m = &m
 		templ.Execute(s, c)
 	}
+}
+
+// .... document... 
+func WebServer() (gs *GlobalStatusSync) {
+	syncStatus := &GlobalStatusSync{
+		webSessionInfo: make(chan SessionInfo),
+		webMetaInfo:    make(chan MetaInfo),
+	}
+	webServer := &webTorrentStats{syncStatus}
+	if webStatusPort != "" {
+		http.Handle("/", webServer)
+		log.Stderrf("Starting web status server at %s", webStatusPort)
+		go http.ListenAndServe(webStatusPort, nil)
+	}
+	return syncStatus
 }
 
 var fmap = template.FormatterMap{

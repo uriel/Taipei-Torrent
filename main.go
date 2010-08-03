@@ -3,45 +3,43 @@ package main
 import (
 	"flag"
 	"log"
-	"http"
+	"os"
+	"taipei"
 )
 
-var torrent *string = flag.String("torrent", "", "URL or path to a torrent file")
-var fileDir *string = flag.String("fileDir", ".", "path to directory where files are stored")
-var debugp *bool = flag.Bool("debug", false, "Turn on debugging")
-var port *int = flag.Int("port", 0, "Port to listen on. Defaults to random.")
-var useUPnP *bool = flag.Bool("useUPnP", false, "Use UPnP to open port in firewall.")
-var webStatusPort *string = flag.String("webStatusPort", "", "Enable web server to show transmission status on this address (e.g: 127.0.0.1:9999)")
+var torrent string
+var debugp bool
+
+func init() {
+	flag.StringVar(&torrent, "torrent", "", "URL or path to a torrent file (Required)")
+	flag.BoolVar(&debugp, "debug", false, "Turn on debugging")
+
+	// Check required flags.
+	req := []interface{}{"torrent"}
+	for _, n := range req {
+		f := flag.Lookup(n.(string))
+		if f.DefValue == f.Value.String() {
+			log.Stderrf("Required flag not set: -%s", f.Name)
+			flag.Usage()
+			os.Exit(1)
+		}
+	}
+}
 
 func main() {
 	// testBencode()
 	// testUPnP()
 	flag.Parse()
 	log.Stderr("Starting.")
-
 	// Auxiliary web server. Currently only displays session stats.
-	syncStatus := &GlobalStatusSync{
-		webSessionInfo: make(chan SessionInfo),
-		webMetaInfo:    make(chan MetaInfo),
-	}
-	webServer := &webTorrentStats{syncStatus}
-	if *webStatusPort != "" {
-		http.Handle("/", webServer)
-		log.Stderrf("Starting web status server at %s", *webStatusPort)
-		go http.ListenAndServe(*webStatusPort, nil)
-	}
-
+	syncStatus := taipei.WebServer()
 	// Bittorrent.
-	listenPort, err := chooseListenPort()
-	if err != nil {
-		log.Stderr("Could not choose listen port. Peer connectivity will be affected.")
-	}
-	ts, err := NewTorrentSession(*torrent, listenPort, syncStatus)
+	ts, err := taipei.NewTorrentSession(torrent, syncStatus)
 	if err != nil {
 		log.Stderr("Could not create torrent session.", err)
 		return
 	}
-	err = ts.DoTorrent(listenPort)
+	err = ts.DoTorrent()
 	if err != nil {
 		log.Stderr("Failed: ", err)
 	} else {
