@@ -2,7 +2,6 @@ include $(GOROOT)/src/Make.$(GOARCH)
 
 TARG=taipei
 GOFILES=\
-	dht_node.go\
         bitset.go\
         files.go\
         metainfo.go\
