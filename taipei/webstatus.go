@@ -1,16 +1,18 @@
 package taipei
 
 import (
+	_ "expvar"
 	"flag"
 	"fmt"
 	"http"
 	"log"
 	"template"
 )
+
 var webStatusPort string
 
 func init() {
-        flag.StringVar(&webStatusPort, "webStatusPort", "", "Enable web server to show transmission status on this address (e.g: 127.0.0.1:9999)")
+	flag.StringVar(&webStatusPort, "webStatusPort", "", "Enable web server to show transmission status on this address (e.g: 127.0.0.1:9999)")
 }
 
 type stats struct {
@@ -19,7 +21,7 @@ type stats struct {
 }
 
 type webTorrentStats struct {
-	g   *GlobalStatusSync // Contains channels written to by the torrent engine.
+	g *GlobalStatusSync // Contains channels written to by the torrent engine.
 }
 
 func (w *webTorrentStats) ServeHTTP(c *http.Conn, req *http.Request) {
@@ -39,7 +41,7 @@ func (w *webTorrentStats) ServeHTTP(c *http.Conn, req *http.Request) {
 	}
 }
 
-// .... document... 
+// .... document...
 func WebServer() (gs *GlobalStatusSync) {
 	syncStatus := &GlobalStatusSync{
 		webSessionInfo: make(chan SessionInfo),
