@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	NS_PER_S = 1000000000
+	NS_PER_S  = 1000000000
 	MAX_PEERS = 60
-	DHT_BIT = 128
+	DHT_BIT   = 128
 )
 
 // BitTorrent message types. Sources:
@@ -40,13 +40,13 @@ const (
 var port int
 var useUPnP bool
 var fileDir string
-var useDht bool
+var useDHT bool
 
 func init() {
 	flag.StringVar(&fileDir, "fileDir", ".", "path to directory where files are stored")
 	flag.IntVar(&port, "port", 0, "Port to listen on. Defaults to random.")
 	flag.BoolVar(&useUPnP, "useUPnP", false, "Use UPnP to open port in firewall.")
-	flag.BoolVar(&useDht, "useDht", false, "Use DHT to get peers (NOT WORKING).")
+	flag.BoolVar(&useDHT, "useDHT", false, "Use DHT to get peers (NOT WORKING).")
 }
 
 func peerId() string {
@@ -175,7 +175,7 @@ type TorrentSession struct {
 	goodPieces      int
 	activePieces    map[int]*ActivePiece
 	lastHeartBeat   int64
-	dht		*DhtEngine
+	dht             *DhtEngine
 }
 
 func NewTorrentSession(torrent string) (ts *TorrentSession, err os.Error) {
@@ -225,7 +225,7 @@ func NewTorrentSession(torrent string) (ts *TorrentSession, err os.Error) {
 		left = left - t.m.Info.PieceLength + int64(t.lastPieceLength)
 	}
 	t.si = &SessionInfo{PeerId: peerId(), Port: listenPort, Left: left}
-	if useDht {
+	if useDHT {
 		if t.dht, err = NewDhtNode(t.si.PeerId); err != nil {
 			log.Stderr("DHT node creation error", err.String())
 			return
@@ -596,9 +596,9 @@ func (t *TorrentSession) DoMessage(p *peerState, message []byte) (err os.Error) 
 	}
 	if len(p.id) == 0 {
 		// This is the header message from the peer.
-		if useDht {
+		if useDHT {
 			// If 128, then it supports DHT.
-			if int(message[0]) & DHT_BIT == DHT_BIT {
+			if int(message[0])&DHT_BIT == DHT_BIT {
 				t.dht.RemoteNodeAcquaintance <- p.address
 			}
 		}
