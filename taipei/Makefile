@@ -8,8 +8,6 @@ GOFILES=\
         peer.go\
         torrent.go\
         upnp.go\
-	webstatus.go\
         dht.go\
-        krpc.go\
-
+        krpc.go
 include $(GOROOT)/src/Make.pkg
