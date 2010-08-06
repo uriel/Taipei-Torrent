@@ -83,23 +83,24 @@ func (r *DhtRemoteNode) handshake() {
 }
 
 
-// Ping returns the bencoded string to be used for DHT ping queries.
+// encodedPing returns the bencoded string to be used for DHT ping queries.
 func (r *DhtRemoteNode) encodedPing(transId string) (msg string, err os.Error) {
 	queryArguments := map[string]string{"id": r.localNode.peerID}
-	pingMessage := map[string]interface{}{
-		"t": transId,
-		"y": "q",
-		"q": "ping",
-		"a": queryArguments,
-	}
-	var b bytes.Buffer
-	if err = bencode.Marshal(&b, pingMessage); err != nil {
-		log.Stderr("bencode error: " + err.String())
-		return
-	}
-	msg = string(b.Bytes())
+	msg, err = encodeMsg("ping", queryArguments, transId)
 	return
 }
+
+// encodedGetPeers returns the bencoded string to be used for DHT get_peers queries.
+func (r *DhtRemoteNode) encodedGetPeers(transId string, infohash string) (msg string, err os.Error) {
+	queryArguments := map[string]string{
+		"id":        r.localNode.peerID,
+		"info_hash": infohash,
+	}
+	msg, err = encodeMsg("get_peers", queryArguments, transId)
+	return
+
+}
+
 func (r *DhtRemoteNode) newTransaction() string {
 	// TODO: Find a better way to convert int to string. strconv.Itoa()
 	// didnt seem to work, neither did string().
@@ -119,8 +120,19 @@ func (r *DhtRemoteNode) sendMsg(msg string) (response map[string]interface{}, er
 		log.Stderr("dht node write failed", err.String())
 		return
 	}
+	// TODO: Instead of waiting for a response here, we should exit, and
+	// have a separate goroutine for handling all incoming queries.
 	if response, err = readResponse(c, PING_RES_LEN); err != nil {
 		return
+	}
+	return
+}
+
+func (r *DhtRemoteNode) dialNode(ch chan net.Conn) {
+	conn, err := net.Dial("udp", "", r.address)
+	if err == nil {
+		conn.SetReadTimeout(3 * NS_PER_S)
+		ch <- conn
 	}
 	return
 }
@@ -148,12 +160,18 @@ func readResponse(c net.Conn, length int) (response map[string]interface{}, err 
 	// log.Stderrf("%+v", reply)
 	return
 }
-
-func (r *DhtRemoteNode) dialNode(ch chan net.Conn) {
-	conn, err := net.Dial("udp", "", r.address)
-	if err == nil {
-		conn.SetReadTimeout(3 * NS_PER_S)
-		ch <- conn
+func encodeMsg(queryType string, queryArguments map[string]string, transId string) (msg string, err os.Error) {
+	query := map[string]interface{}{
+		"t": transId,
+		"y": "q",
+		"q": queryType,
+		"a": queryArguments,
 	}
+	var b bytes.Buffer
+	if err = bencode.Marshal(&b, query); err != nil {
+		log.Stderr("bencode error: " + err.String())
+		return
+	}
+	msg = string(b.Bytes())
 	return
 }

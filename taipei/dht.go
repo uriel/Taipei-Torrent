@@ -11,11 +11,9 @@ import (
 // client can only use the public (first letter uppercase) channels for
 // communicating with the DHT goroutines.
 type DhtEngine struct {
-	peerID                 string
-	// Currently only keep good ones in memory.
-	goodNodes              map[string]*DhtRemoteNode
-	// DHT internal channel.
-	handshakeResults       chan *DhtRemoteNode
+	peerID           string
+	goodNodes        map[string]*DhtRemoteNode
+	handshakeResults chan *DhtRemoteNode // DHT internal channel.
 
 	// Public channels:
 	Quit                   chan bool

@@ -29,6 +29,34 @@ func TestPing(t *testing.T) {
 	}
 }
 
+type getPeersTest struct {
+	transId  string
+	nodeId   string
+	infoHash string
+	out      string
+}
+
+
+var getPeersTests = []getPeersTest{
+	getPeersTest{"aa", "abcdefghij0123456789", "mnopqrstuvwxyz123456", "d1:ad2:id20:abcdefghij01234567899:info_hash20:mnopqrstuvwxyz123456e1:q9:get_peers1:t2:aa1:y1:q"},
+}
+
+
+func TestGetPeers(t *testing.T) {
+	for _, p := range getPeersTests {
+		n, err := NewDhtNode(p.nodeId)
+		if err != nil {
+			t.Errorf("NewDhtNode(): %v", err)
+		}
+		r := newRemoteNode(n, "") // Address
+		v, _ := r.encodedGetPeers(p.transId, p.infoHash)
+		if v != p.out {
+			t.Errorf("GetPeers(%s, %s) = %s, want %s.", p.nodeId, p.infoHash, v, p.out)
+		}
+	}
+}
+
+
 // Requires Internet access.
 func TestDht(t *testing.T) {
 	node, err := NewDhtNode("abcdefghij0123456789")
@@ -40,7 +68,7 @@ func TestDht(t *testing.T) {
 	// Until we have our own DHT router, we'll use the bittorrent.com ones.
 	// I hope they dont mind.. :-P.
 	realDHTNodes := []string{
-		//"127.0.0.1:53390",
+		//"127.0.0.1:33149",
 		"router.bittorrent.com:6881",
 	}
 	for i, a := range realDHTNodes {
