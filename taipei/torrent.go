@@ -14,9 +14,11 @@ import (
 	"time"
 )
 
-const NS_PER_S = 1000000000
-
-const MAX_PEERS = 60
+const (
+	NS_PER_S = 1000000000
+	MAX_PEERS = 60
+	DHT_BIT = 128
+)
 
 // BitTorrent message types. Sources:
 // http://bittorrent.org/beps/bep_0003.html
@@ -38,11 +40,13 @@ const (
 var port int
 var useUPnP bool
 var fileDir string
+var useDht bool
 
 func init() {
 	flag.StringVar(&fileDir, "fileDir", ".", "path to directory where files are stored")
 	flag.IntVar(&port, "port", 0, "Port to listen on. Defaults to random.")
 	flag.BoolVar(&useUPnP, "useUPnP", false, "Use UPnP to open port in firewall.")
+	flag.BoolVar(&useDht, "useDht", false, "Use DHT to get peers (NOT WORKING).")
 }
 
 func peerId() string {
@@ -172,6 +176,7 @@ type TorrentSession struct {
 	activePieces    map[int]*ActivePiece
 	lastHeartBeat   int64
 	globalStatus    *GlobalStatusSync
+	dht		*DhtEngine
 }
 
 func NewTorrentSession(torrent string, gs *GlobalStatusSync) (ts *TorrentSession, err os.Error) {
@@ -223,6 +228,13 @@ func NewTorrentSession(torrent string, gs *GlobalStatusSync) (ts *TorrentSession
 		left = left - t.m.Info.PieceLength + int64(t.lastPieceLength)
 	}
 	t.si = &SessionInfo{PeerId: peerId(), Port: listenPort, Left: left}
+	if useDht {
+		if t.dht, err = NewDhtNode(t.si.PeerId); err != nil {
+			log.Stderr("DHT node creation error", err.String())
+			return
+		}
+		go t.dht.DoDht()
+	}
 	return t, err
 }
 
@@ -273,6 +285,7 @@ func (t *TorrentSession) AddPeer(conn net.Conn) {
 	ps.address = peer
 	var header [68]byte
 	copy(header[0:], kBitTorrentHeader[0:])
+	// TODO: Announce DHT support when we're ready.
 	copy(header[28:48], string2Bytes(t.m.InfoHash))
 	copy(header[48:68], string2Bytes(t.si.PeerId))
 
@@ -590,6 +603,13 @@ func (t *TorrentSession) DoMessage(p *peerState, message []byte) (err os.Error) 
 	}
 	if len(p.id) == 0 {
 		// This is the header message from the peer.
+		if useDht {
+			// If 128, then it supports DHT.
+			if int(message[0]) & DHT_BIT == DHT_BIT {
+				t.dht.RemoteNodeAcquaintance <- p.address
+			}
+		}
+
 		peersInfoHash := string(message[8:28])
 		if peersInfoHash != t.m.InfoHash {
 			return os.NewError("this peer doesn't have the right info hash")
