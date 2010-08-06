@@ -4,12 +4,12 @@
 // - error
 //
 // RPCs:
-//      ping:          
+//      ping:
 //         see if node is reachable and save it on routing table.
 //      find_node:
 //	   run when DHT node count drops, or every X minutes. Just to
 //   	   ensure our DHT routing table is still useful.
-//      get_peers:     
+//      get_peers:
 //	   the real deal. Iteratively queries DHT nodes and find new
 //         sources for a particular infohash.
 //	announce_peer:
@@ -136,7 +136,6 @@ func readResponse(c net.Conn, length int) (response map[string]interface{}, err 
 	buf := make([]byte, length)
 	log.Stderrf("Reading...")
 	if _, err = c.Read(buf); err != nil {
-		log.Stderrf("Read failure!!! %v", err.String())
 		return
 	} else {
 		log.Stderrf("====> response received %v (len=%s)", string(buf), len(buf))
@@ -153,6 +152,7 @@ func readResponse(c net.Conn, length int) (response map[string]interface{}, err 
 func (r *DhtRemoteNode) dialNode(ch chan net.Conn) {
 	conn, err := net.Dial("udp", "", r.address)
 	if err == nil {
+		conn.SetReadTimeout(3 * NS_PER_S)
 		ch <- conn
 	}
 	return
