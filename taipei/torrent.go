@@ -600,7 +600,10 @@ func (t *TorrentSession) DoMessage(p *peerState, message []byte) (err os.Error) 
 		if useDHT {
 			// If 128, then it supports DHT.
 			if int(message[0])&DHT_BIT == DHT_BIT {
-				t.dht.RemoteNodeAcquaintance <- p.address
+				candidate := &DhtNodeCandidate{id: p.id, address: p.address}
+				// It's OK if we know this node already. The DHT engine will
+                                // ignore it accordingly.
+				t.dht.RemoteNodeAcquaintance <- candidate
 			}
 		}
 

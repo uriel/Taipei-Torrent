@@ -6,19 +6,20 @@ import (
 	"os"
 )
 
-// DhtEngine should be created by NewDhtNode() and provides DHT features like
-// finding new peers for torrent downloads, witout requiring a tracker. The
-// client can only use the public (first letter uppercase) channels for
-// communicating with the DHT goroutines.
+// DhtEngine should be created by NewDhtNode(). It provides DHT features to a
+// torrent client, such as finding new peers for torrent downloads without
+// requiring a tracker. The client can only use the public (first letter
+// uppercase) channels for communicating with the DHT goroutines.
 type DhtEngine struct {
 	peerID           string
-	goodNodes        map[string]*DhtRemoteNode
-	handshakeResults chan *DhtRemoteNode // DHT internal channel.
+	goodNodes        map[string]*DhtRemoteNode // key == peer ID
+	handshakeResults chan *DhtRemoteNode       // DHT internal channel.
 
 	// Public channels:
 	Quit                   chan bool
-	RemoteNodeAcquaintance chan string
-	// DhtPeersNeeded
+	RemoteNodeAcquaintance chan *DhtNodeCandidate
+	PeersNeeded            chan *InfohashPeers
+	PeersNeededResults     chan *InfohashPeers // Zero-length results are valid.
 	// DudeWeHeardAboutANewTorrent
 }
 
@@ -27,27 +28,61 @@ func NewDhtNode(nodeId string) (node *DhtEngine, err os.Error) {
 		peerID:                 nodeId,
 		goodNodes:              make(map[string]*DhtRemoteNode),
 		handshakeResults:       make(chan *DhtRemoteNode),
-		RemoteNodeAcquaintance: make(chan string),
+		PeersNeededResults:     make(chan *InfohashPeers),
+		RemoteNodeAcquaintance: make(chan *DhtNodeCandidate),
+		PeersNeeded:            make(chan *InfohashPeers),
 		Quit:                   make(chan bool),
 	}
 	return
 }
 
-// DoDht starts the DHT node and should be run as a goroutine. To make it quit,
-// send any value to the Quit channel of the DhtEngine.
+type InfohashPeers struct {
+	infoHash string
+	nodes    map[string]int // key=address, value=ignored.
+}
+
+
+// Companion of the d.PeersNeeded channel.
+func (d *DhtEngine) NewNeedDhtPeers(infoHash string) (needPeers *InfohashPeers) {
+	peers := map[string]int{}
+	needPeers = &InfohashPeers{infoHash, peers}
+	return
+}
+
+type DhtNodeCandidate struct {
+	id      string
+	address string
+}
+
+
+// DoDht is the DHT node main loop and should be run as a goroutine by the
+// torrent client. To make it quit, send any value to the Quit channel of the
+// DhtEngine.
 func (d *DhtEngine) DoDht() {
+	log.Stdout("Starting DHT node.")
 	for {
 		select {
 		case helloNode := <-d.RemoteNodeAcquaintance:
 			// We've got a new node id. We need to:
+			// - see if we know it already, skip accordingly.
 			// - ping it and see if it's reachable. Ignore otherwise.
 			// - save it on our list of good nodes.
 			// - later, we'll implement bucketing, etc.
-			newRemoteNode(d, helloNode)
+			if _, ok := d.goodNodes[helloNode.id]; !ok {
+				r := d.newRemoteNode(helloNode.id, helloNode.address)
+				go r.handshake()
+			}
+		case needPeers := <-d.PeersNeeded:
+			// torrent server is asking for more peers for a particular infoHash.
+			// Ask the closest nodes for directions. There is a
+			// good chance that results will be empty.
+			log.Stderr("PeersNeeded. Querying on background.")
+			// The goroutine will write into the PeersNeededResults channel.
+			go d.GetPeers(needPeers)
 		case reachable := <-d.handshakeResults:
 			if reachable != nil {
 				log.Stderr("reachable:", reachable.address)
-				d.goodNodes[reachable.address] = reachable
+				d.goodNodes[reachable.id] = reachable
 			} else {
 				// Should never happen.
 				log.Stderr("got a nil at d.RemoteNodeAcquaintance")
@@ -56,7 +91,7 @@ func (d *DhtEngine) DoDht() {
 			log.Stderr("Exiting..")
 			return
 			//
-			// case needMoreNodes := <-DhtPeersNeeded // (torrent ran out of peers)
+			// case needMoreNodes := <-PeersNeeded // (torrent ran out of peers)
 			// case newActiveTorrent := <-DudeWeHeardAboutANewTorrent
 			//					       // We are tracking a new torrent.
 			//                                             // Adverstise ourselfes as a node
@@ -67,4 +102,19 @@ func (d *DhtEngine) DoDht() {
 	}
 }
 
+// Should be run as goroutine. Caller must read results from d.PeersNeededResults.
+func (d *DhtEngine) GetPeers(peers *InfohashPeers) {
+	ih := peers.infoHash
+	for _, r := range d.goodNodes {
+		// TODO: proper distance detection.
+		peers.nodes = r.recursiveGetPeers(ih, 5)
+		break // TODO: decide when to stop, and whether to start returning results earlier.
+	}
+	for k, _ := range peers.nodes {
+		log.Stdoutf("Found TCP torrent peer candidate %q", k)
+	}
+	d.PeersNeededResults <- peers
+}
+
 // TODO: Create a routing table. Save routing table on disk to be preserved between instances.
+// TODO: keep a blacklist of DHT nodes somewhere so we dont keep trying to connect to them.

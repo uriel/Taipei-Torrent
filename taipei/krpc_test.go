@@ -11,17 +11,23 @@ type pingTest struct {
 	out     string
 }
 
+func startDhtNode(t *testing.T) *DhtEngine {
+	node, err := NewDhtNode("abcdefghij0123456789")
+	if err != nil {
+		t.Errorf("NewDhtNode(): %v", err)
+	}
+	go node.DoDht()
+	return node
+}
+
 var pingTests = []pingTest{
 	pingTest{"XX", "abcdefghij0123456789", "d1:ad2:id20:abcdefghij0123456789e1:q4:ping1:t2:XX1:y1:qe"},
 }
 
 func TestPing(t *testing.T) {
 	for _, p := range pingTests {
-		n, err := NewDhtNode(p.nodeId)
-		if err != nil {
-			t.Errorf("NewDhtNode(): %v", err)
-		}
-		r := newRemoteNode(n, "") // Address
+		node := startDhtNode(t)
+		r := node.newRemoteNode("", "") // id, Address
 		v, _ := r.encodedPing(p.transId)
 		if v != p.out {
 			t.Errorf("Ping(%s) = %s, want %s.", p.nodeId, v, p.out)
@@ -36,19 +42,14 @@ type getPeersTest struct {
 	out      string
 }
 
-
 var getPeersTests = []getPeersTest{
-	getPeersTest{"aa", "abcdefghij0123456789", "mnopqrstuvwxyz123456", "d1:ad2:id20:abcdefghij01234567899:info_hash20:mnopqrstuvwxyz123456e1:q9:get_peers1:t2:aa1:y1:q"},
+	getPeersTest{"aa", "abcdefghij0123456789", "mnopqrstuvwxyz123456", "d1:ad2:id20:abcdefghij01234567899:info_hash20:mnopqrstuvwxyz123456e1:q9:get_peers1:t2:aa1:y1:qe"},
 }
-
 
 func TestGetPeers(t *testing.T) {
 	for _, p := range getPeersTests {
-		n, err := NewDhtNode(p.nodeId)
-		if err != nil {
-			t.Errorf("NewDhtNode(): %v", err)
-		}
-		r := newRemoteNode(n, "") // Address
+		n := startDhtNode(t)
+		r := n.newRemoteNode("", "") // id, address
 		v, _ := r.encodedGetPeers(p.transId, p.infoHash)
 		if v != p.out {
 			t.Errorf("GetPeers(%s, %s) = %s, want %s.", p.nodeId, p.infoHash, v, p.out)
@@ -56,32 +57,45 @@ func TestGetPeers(t *testing.T) {
 	}
 }
 
-
 // Requires Internet access.
-func TestDht(t *testing.T) {
-	node, err := NewDhtNode("abcdefghij0123456789")
-	if err != nil {
-		t.Errorf("NewDhtNode(): %v", err)
+func TestDhtBigAndSlow(t *testing.T) {
+	node := startDhtNode(t)
+	realDHTNodes := map[string]string{
+		// DHT test router.
+		"DHT_ROUTER": "dht.cetico.org:9660",
 	}
-	go node.DoDht()
-
-	// Until we have our own DHT router, we'll use the bittorrent.com ones.
-	// I hope they dont mind.. :-P.
-	realDHTNodes := []string{
-		//"127.0.0.1:33149",
-		"router.bittorrent.com:6881",
+	for id, address := range realDHTNodes {
+		candidate := &DhtNodeCandidate{id: id, address: address}
+		node.RemoteNodeAcquaintance <- candidate
 	}
-	for i, a := range realDHTNodes {
-		t.Log("syn", i)
-		node.RemoteNodeAcquaintance <- a
-	}
-	time.Sleep(1 * NS_PER_S)
-	for _, k := range realDHTNodes {
-		if _, ok := node.goodNodes[k]; !ok {
-			t.Error("Node not in good nodes list", k)
+	time.Sleep(2 * NS_PER_S)
+	for id, _ := range realDHTNodes {
+		if _, ok := node.goodNodes[id]; !ok {
+			t.Error("Node not in good nodes list")
 		}
 	}
+	weee, ok := node.goodNodes["DHT_ROUTER"]
+	if weee == nil || !ok {
+		t.Fatal("Test DHT node is not reachable.")
+	}
+	// Test the needPeers feature using an Ubuntu image.
+	// http://releases.ubuntu.com/9.10/ubuntu-9.10-desktop-i386.iso.torrent
+	infoHash := string([]byte{0x98, 0xc5, 0xc3, 0x61, 0xd0, 0xbe, 0x5f,
+		0x2a, 0x07, 0xea, 0x8f, 0xa5, 0x05, 0x2e,
+		0x5a, 0xa4, 0x80, 0x97, 0xe7, 0xf6})
+	needPeers := node.NewNeedDhtPeers(infoHash)
+	node.PeersNeeded <- needPeers
+	needPeers = <-node.PeersNeededResults
+	t.Logf("%d new torrent peers obtained.", len(needPeers.nodes))
+	if len(needPeers.nodes) == 0 {
+		t.Fatal("Could not find new torrent peers.")
+	}
+
+	// All went well!
+	t.Logf("List of all reachable DHT hosts:")
+	for _, r := range node.goodNodes {
+		t.Log(r.address)
+	}
 	t.Log("Ordering DHT node to exit..")
-	// If something went bad, this will block forever.
 	node.Quit <- true
 }
