@@ -50,10 +50,10 @@ type DhtRemoteNode struct {
 }
 
 const (
-	// Very arbitrary value.
-	MAX_RES_LEN      = 1000000
 	NODE_CONTACT_LEN = 26
 	PEER_CONTACT_LEN = 6
+	UDP_READ_TIMEOUT = 1e9	// one second.
+	UDP_READ_RETRY = 3
 )
 
 // Called by DHT server or torrent server. Should return immediately.
@@ -102,7 +102,7 @@ func (r *DhtRemoteNode) recursiveGetPeers(infoHash string, count int) (peers map
 	m, _ := r.encodedGetPeers(t, infoHash)
 	response, err := r.sendMsg(m)
 	if err != nil {
-		log.Stderr("GetPeers query to host failed", r.address, err.String())
+		// TODO: keep a list of bad nodes, or a list with all nodes with a flag for good nodes.
 		return
 	}
 	if response.T != string(t) {
@@ -230,7 +230,7 @@ func (r *DhtRemoteNode) sendMsg(msg string) (response responseType, err os.Error
 	// order, and we don't want to block here forever waiting for a
 	// response. Instead we should exit, and have a separate goroutine for
 	// handling all incoming queries.
-	if response, err = readResponse(c, MAX_RES_LEN); err != nil {
+	if response, err = readResponse(c); err != nil {
 		return
 	}
 	return
@@ -239,29 +239,64 @@ func (r *DhtRemoteNode) sendMsg(msg string) (response responseType, err os.Error
 func (r *DhtRemoteNode) dialNode(ch chan net.Conn) {
 	conn, err := net.Dial("udp", "", r.address)
 	if err == nil {
-		conn.SetReadTimeout(3 * NS_PER_S)
+		// The more we wait the better, because these nodes can be very
+		// slow.  But that means whatever goroutine reads from this
+		// connection will block for a long time, so keep that in mind.
+		conn.SetReadTimeout(UDP_READ_TIMEOUT)
 		ch <- conn
 	}
 	return
 }
 
 // Read responses from bencode-speaking nodes. Return the appropriate data structure.
-func readResponse(c net.Conn, length int) (response responseType, err os.Error) {
+// TODO: should listen to all data coming into the port, then deciding what to
+// do, based on peer ID and transaction ID.
+func readResponse(c net.Conn) (response responseType, err os.Error) {
 	// The calls to bencode.Unmarshal() can be fragile.
 	defer func() {
 		if x := recover(); x != nil {
 			log.Stderrf("!!! Recovering from panic() after bencode.Unmarshal")
 		}
 	}()
-	buf := make([]byte, length)
-	if _, err = c.Read(buf); err != nil {
-		return
-	} else {
-		buf = bytes.Trim(buf, string(0))
+
+	// Currently, tries to read from socket up to 3 times, blocking each
+	// read for one second (or UDP_READ_TIMEOUT), waiting for all data to
+	// come.  If partial data can be bdecoded, stop reading from socket and
+	// return it.
+	// I'm sure there are better ways. For example, could instead read X
+	// bytes each time.
+	var Buf bytes.Buffer
+	i := 0
+	for i < UDP_READ_RETRY {
+		i++
+		var n int64
+		n, err = Buf.ReadFrom(c)
+		if err == nil {
+			// Should never happen, always returns os.EAGAIN at least.
+			log.Stderr("readResponse: got err == nil, which is not expected. This is a bug.")
+			continue
+		}
+		if n == 0 {
+			continue
+		}
+                if e, ok := err.(*net.OpError); ok && e.Error == os.EAGAIN {
+			// Since this is UDP, it should be quite common that we
+			// get partial data. Just discard it if that's the
+			// case.
+			if e2 := bencode.Unmarshal(bytes.NewBuffer(Buf.Bytes()), &response); e2 == nil {
+				err = nil
+				//log.Stderrf("client=%q, GOOD! unmarshal finished. d=(%q)", c.RemoteAddr(), Buf.String())
+				break
+			} else {
+				log.Stdoutf("DEBUG client=%q, unmarshal error, odd or partial data during UDP read? d=(%q), err=%s", c.RemoteAddr(), Buf.String(), e2.String())
+			}
+		} else {
+			log.Stderrf("readResponse client=%s, Unexpected error: %s", c.RemoteAddr(), e.Error.String())
+		}
 	}
-	err = bencode.Unmarshal(bytes.NewBuffer(buf), &response)
 	return
 }
+
 func encodeMsg(queryType string, queryArguments map[string]string, transId string) (msg string, err os.Error) {
 	type structNested struct {
 		T string            "t"

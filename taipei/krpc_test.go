@@ -63,20 +63,18 @@ func TestDhtBigAndSlow(t *testing.T) {
 	realDHTNodes := map[string]string{
 		// DHT test router.
 		"DHT_ROUTER": "dht.cetico.org:9660",
+		//"DHT_ROUTER": "router.bittorrent.com:6881",
+		//"DHT_ROUTER": "localhost:33149",
 	}
 	for id, address := range realDHTNodes {
 		candidate := &DhtNodeCandidate{id: id, address: address}
 		node.RemoteNodeAcquaintance <- candidate
 	}
-	time.Sleep(2 * NS_PER_S)
+	time.Sleep(1.5 * UDP_READ_TIMEOUT) // ReadTimeout is set to 3
 	for id, _ := range realDHTNodes {
-		if _, ok := node.goodNodes[id]; !ok {
-			t.Error("Node not in good nodes list")
+		if address, ok := node.goodNodes[id]; !ok {
+			t.Fatalf("External DHT node not reachable: %s", address)
 		}
-	}
-	weee, ok := node.goodNodes["DHT_ROUTER"]
-	if weee == nil || !ok {
-		t.Fatal("Test DHT node is not reachable.")
 	}
 	// Test the needPeers feature using an Ubuntu image.
 	// http://releases.ubuntu.com/9.10/ubuntu-9.10-desktop-i386.iso.torrent
