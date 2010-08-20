@@ -2,6 +2,8 @@
 package taipei
 
 import (
+	"expvar"
+	"json"
 	"log"
 	"os"
 )
@@ -12,7 +14,7 @@ import (
 // uppercase) channels for communicating with the DHT goroutines.
 type DhtEngine struct {
 	peerID           string
-	goodNodes        map[string]*DhtRemoteNode // key == peer ID
+	nodes            map[string]*DhtRemoteNode // key == peer ID
 	handshakeResults chan *DhtRemoteNode       // DHT internal channel.
 
 	// Public channels:
@@ -23,16 +25,28 @@ type DhtEngine struct {
 	// DudeWeHeardAboutANewTorrent
 }
 
+type DhtStatsType struct {
+	engines	[]*DhtEngine
+}
+
+var DhtStats DhtStatsType
+
 func NewDhtNode(nodeId string) (node *DhtEngine, err os.Error) {
 	node = &DhtEngine{
 		peerID:                 nodeId,
-		goodNodes:              make(map[string]*DhtRemoteNode),
+		// TODO: cleanup bad nodes from time to time.
+		nodes:                  make(map[string]*DhtRemoteNode),
 		handshakeResults:       make(chan *DhtRemoteNode),
 		PeersNeededResults:     make(chan *InfohashPeers),
 		RemoteNodeAcquaintance: make(chan *DhtNodeCandidate),
 		PeersNeeded:            make(chan *InfohashPeers),
 		Quit:                   make(chan bool),
 	}
+
+	// Update list of known engines.
+	s := DhtStats.engines
+	s = s[0:len(s)] // We assume the cap is big enough.
+	s[len(s)-1] = node
 	return
 }
 
@@ -68,7 +82,7 @@ func (d *DhtEngine) DoDht() {
 			// - ping it and see if it's reachable. Ignore otherwise.
 			// - save it on our list of good nodes.
 			// - later, we'll implement bucketing, etc.
-			if _, ok := d.goodNodes[helloNode.id]; !ok {
+			if _, ok := d.nodes[helloNode.id]; !ok {
 				r := d.newRemoteNode(helloNode.id, helloNode.address)
 				go r.handshake()
 			}
@@ -79,10 +93,12 @@ func (d *DhtEngine) DoDht() {
 			log.Stderr("PeersNeeded. Querying on background.")
 			// The goroutine will write into the PeersNeededResults channel.
 			go d.GetPeers(needPeers)
-		case reachable := <-d.handshakeResults:
-			if reachable != nil {
-				log.Stderr("reachable:", reachable.address)
-				d.goodNodes[reachable.id] = reachable
+		case node := <-d.handshakeResults:
+			if node != nil {
+				d.nodes[node.id] = node
+				if node.reachable {
+					log.Stderr("reachable:", node.address)
+				}
 			} else {
 				// Should never happen.
 				log.Stderr("got a nil at d.RemoteNodeAcquaintance")
@@ -105,7 +121,10 @@ func (d *DhtEngine) DoDht() {
 // Should be run as goroutine. Caller must read results from d.PeersNeededResults.
 func (d *DhtEngine) GetPeers(peers *InfohashPeers) {
 	ih := peers.infoHash
-	for _, r := range d.goodNodes {
+	for _, r := range d.nodes {
+		if !r.reachable {
+			continue
+		}
 		// TODO: proper distance detection.
 		peers.nodes = r.recursiveGetPeers(ih, 5)
 		break // TODO: decide when to stop, and whether to start returning results earlier.
@@ -118,3 +137,15 @@ func (d *DhtEngine) GetPeers(peers *InfohashPeers) {
 
 // TODO: Create a routing table. Save routing table on disk to be preserved between instances.
 // TODO: keep a blacklist of DHT nodes somewhere so we dont keep trying to connect to them.
+
+
+func dhtstats() string {
+	// Not thread-safe but who cares, nobody uses this anyway.
+	b, _ := json.MarshalIndent(&DhtStats, "", "\t")
+	return string(b)
+}
+
+func init() {
+	DhtStats.engines = make([]*DhtEngine, 1, 10)
+	expvar.Publish("dhtengine", expvar.StringFunc(dhtstats))
+}

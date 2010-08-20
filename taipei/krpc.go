@@ -47,6 +47,7 @@ type DhtRemoteNode struct {
 	// treated as string.
 	lastTransactionID int
 	localNode         *DhtEngine
+	reachable	bool
 }
 
 const (
@@ -63,14 +64,13 @@ func (d *DhtEngine) newRemoteNode(id string, address string) (r *DhtRemoteNode) 
 		lastTransactionID: rand.Intn(255) + 1,  // Doesn't have to be crypto safe.
 		id:                id,
 		localNode:         d,
+		reachable:	   false,
 	}
 	return
 
 }
-// Ping node. If it replies, notify DHT engine. Otherwise just quit and this
-// DhtRemoteNode is never used anymore and will be garbage collected, hopefully.
-// We will lose the transaction ID, but who cares. In the future, we may want
-// to keep this for a while, as a blacklist.
+// Ping node. Notify DHT engine via r.localNode.handshakeResults wether it
+// replies or not.
 //
 // Should run as go routine by DHT engine. Caller must read from
 // r.localNode.handshakeWait() at some point otherwise this will block forever.
@@ -84,13 +84,14 @@ func (r *DhtRemoteNode) handshake() {
 		return
 	}
 	if response.T == string(t) {
-		// Good, a valid reply to our ping. Add to good hosts list.
-		r.localNode.handshakeResults <- r
+		r.reachable = true
+		// Good, a valid reply to our ping, mark it as reachable.
 	} else {
 		// TODO: should try again because they may have responded to a previous query from us.
 		// As it is, only one transaction per remote node may be active, which of course is too restrict.
 		log.Stderrf("wrong transaction id %v, want %v.", response.T, string(t))
 	}
+	r.localNode.handshakeResults <- r
 }
 
 // Contacts this node asking for closest sources for the specified infohash,
@@ -102,7 +103,6 @@ func (r *DhtRemoteNode) recursiveGetPeers(infoHash string, count int) (peers map
 	m, _ := r.encodedGetPeers(t, infoHash)
 	response, err := r.sendMsg(m)
 	if err != nil {
-		// TODO: keep a list of bad nodes, or a list with all nodes with a flag for good nodes.
 		return
 	}
 	if response.T != string(t) {
@@ -145,9 +145,12 @@ func (r *DhtRemoteNode) recursiveGetPeers(infoHash string, count int) (peers map
 	}
 	// TODO: Check if the "distance" for nodes provided are lower than what we already have.
 	for id, address := range parseNodesString(nodes) {
-		r := r.localNode.newRemoteNode(id, address)
-		if values := r.recursiveGetPeers(infoHash, count-1); values != nil {
-			return values
+		// Skip nodes we know already.
+		if _, ok := r.localNode.nodes[id]; !ok {
+			r := r.localNode.newRemoteNode(id, address)
+			if values := r.recursiveGetPeers(infoHash, count-1); values != nil {
+				return values
+			}
 		}
 	}
 	// TODO: update routing table.

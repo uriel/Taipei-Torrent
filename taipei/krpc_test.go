@@ -72,7 +72,7 @@ func TestDhtBigAndSlow(t *testing.T) {
 	}
 	time.Sleep(1.5 * UDP_READ_TIMEOUT) // ReadTimeout is set to 3
 	for id, _ := range realDHTNodes {
-		if address, ok := node.goodNodes[id]; !ok {
+		if address, ok := node.nodes[id]; !ok {
 			t.Fatalf("External DHT node not reachable: %s", address)
 		}
 	}
@@ -90,9 +90,9 @@ func TestDhtBigAndSlow(t *testing.T) {
 	}
 
 	// All went well!
-	t.Logf("List of all reachable DHT hosts:")
-	for _, r := range node.goodNodes {
-		t.Log(r.address)
+	t.Logf("List of all known DHT hosts:")
+	for _, r := range node.nodes {
+		t.Logf("%s, reachable=%t", r.address, r.reachable)
 	}
 	t.Log("Ordering DHT node to exit..")
 	node.Quit <- true
