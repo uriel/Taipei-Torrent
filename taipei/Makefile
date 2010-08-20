@@ -9,5 +9,6 @@ GOFILES=\
         torrent.go\
         upnp.go\
         dht.go\
+        webstatus.go\
         krpc.go
 include $(GOROOT)/src/Make.pkg
