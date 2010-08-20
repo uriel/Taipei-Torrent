@@ -241,11 +241,12 @@ func NewTorrentSession(torrent string, gs *GlobalStatusSync) (ts *TorrentSession
 func (t *TorrentSession) fetchTrackerInfo(event string) {
 	m, si := t.m, t.si
 	log.Stderr("Stats: Uploaded", si.Uploaded, "Downloaded", si.Downloaded, "Left", si.Left)
+	// A single concatenation would brake compilation for ARM.
 	url := m.Announce + "?" +
 		"info_hash=" + http.URLEscape(m.InfoHash) +
 		"&peer_id=" + si.PeerId +
-		"&port=" + strconv.Itoa(si.Port) +
-		"&uploaded=" + strconv.Itoa64(si.Uploaded) +
+		"&port=" + strconv.Itoa(si.Port)
+	url += "&uploaded=" + strconv.Itoa64(si.Uploaded) +
 		"&downloaded=" + strconv.Itoa64(si.Downloaded) +
 		"&left=" + strconv.Itoa64(si.Left) +
 		"&compact=1"
@@ -606,7 +607,10 @@ func (t *TorrentSession) DoMessage(p *peerState, message []byte) (err os.Error) 
 		if useDHT {
 			// If 128, then it supports DHT.
 			if int(message[0])&DHT_BIT == DHT_BIT {
-				t.dht.RemoteNodeAcquaintance <- p.address
+				candidate := &DhtNodeCandidate{id: p.id, address: p.address}
+				// It's OK if we know this node already. The DHT engine will
+                                // ignore it accordingly.
+				t.dht.RemoteNodeAcquaintance <- candidate
 			}
 		}
 
