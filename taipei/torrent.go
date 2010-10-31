@@ -225,6 +225,7 @@ func NewTorrentSession(torrent string) (ts *TorrentSession, err os.Error) {
 		left = left - t.m.Info.PieceLength + int64(t.lastPieceLength)
 	}
 	t.si = &SessionInfo{PeerId: peerId(), Port: listenPort, Left: left}
+	// TODO: Don't use DHT if torrent is private. 
 	if useDHT {
 		if t.dht, err = NewDhtNode(t.si.PeerId); err != nil {
 			log.Stderr("DHT node creation error", err.String())

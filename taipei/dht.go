@@ -138,7 +138,7 @@ func (d *DhtEngine) GetPeers(peers *InfohashPeers) {
 // TODO: Create a routing table. Save routing table on disk to be preserved between instances.
 // TODO: keep a blacklist of DHT nodes somewhere so we dont keep trying to connect to them.
 
-
+// TODO: Fix dhtstats. Add channel to DHT engine that copies stats.
 func dhtstats() string {
 	// Not thread-safe but who cares, nobody uses this anyway.
 	b, _ := json.MarshalIndent(&DhtStats, "", "\t")
