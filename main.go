@@ -10,17 +10,18 @@ import (
 var torrent string
 var debugp bool
 
-func init() {
+func parseFlags() {
 	flag.StringVar(&torrent, "torrent", "", "URL or path to a torrent file (Required)")
 	flag.BoolVar(&debugp, "debug", false, "Turn on debugging")
-}
 
-func checkRequiredFlags() {
+	flag.Parse()
+	// Check required flags.
 	req := []string{"torrent"}
+	flag.Parse()
 	for _, n := range req {
 		f := flag.Lookup(n)
 		if f.DefValue == f.Value.String() {
-			log.Stderrf("Required flag not set: -%s", f.Name)
+			log.Printf("Required flag not set: -%s", f.Name)
 			flag.Usage()
 			os.Exit(1)
 		}
@@ -28,18 +29,19 @@ func checkRequiredFlags() {
 }
 
 func main() {
-	flag.Parse()
-	checkRequiredFlags()
-	log.Stderr("Starting.")
+	// testBencode()
+	// testUPnP()
+	parseFlags()
+	log.Println("Starting.")
 	ts, err := taipei.NewTorrentSession(torrent)
 	if err != nil {
-		log.Stderr("Could not create torrent session.", err)
+		log.Println("Could not create torrent session.", err)
 		return
 	}
 	err = ts.DoTorrent()
 	if err != nil {
-		log.Stderr("Failed: ", err)
+		log.Println("Failed: ", err)
 	} else {
-		log.Stderr("Done")
+		log.Println("Done")
 	}
 }
