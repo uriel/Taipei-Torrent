@@ -274,12 +274,12 @@ func soapRequest(url, function, message string) (r *http.Response, err os.Error)
 		return
 	}
 
-	// log.Stderr("soapRequest ", req)
+	// log.Println("soapRequest ", req)
 
 	r, err = http.Send(&req)
 
 	if r.StatusCode >= 400 {
-		// log.Stderr(function, r.StatusCode)
+		// log.Println(function, r.StatusCode)
 		err = os.NewError("Error " + strconv.Itoa(r.StatusCode) + " for " + function)
 		r.Body.Close()
 		r = nil
@@ -325,7 +325,7 @@ func (n *upnpNAT) AddPortMapping(protocol string, externalPort, internalPort int
 	}
 
 	// TODO: check response to see if the port was forwarded
-	// log.Stderr(message, response)
+	// log.Println(message, response)
 	_ = response
 	return
 }
@@ -345,7 +345,7 @@ func (n *upnpNAT) DeletePortMapping(protocol string, externalPort int) (err os.E
 	}
 
 	// TODO: check response to see if the port was deleted
-	// log.Stderr(message, response)
+	// log.Println(message, response)
 	_ = response
 	return
 }

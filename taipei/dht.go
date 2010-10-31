@@ -73,7 +73,7 @@ type DhtNodeCandidate struct {
 // torrent client. To make it quit, send any value to the Quit channel of the
 // DhtEngine.
 func (d *DhtEngine) DoDht() {
-	log.Stdout("Starting DHT node.")
+	log.Println("Starting DHT node.")
 	for {
 		select {
 		case helloNode := <-d.RemoteNodeAcquaintance:
@@ -90,21 +90,21 @@ func (d *DhtEngine) DoDht() {
 			// torrent server is asking for more peers for a particular infoHash.
 			// Ask the closest nodes for directions. There is a
 			// good chance that results will be empty.
-			log.Stderr("PeersNeeded. Querying on background.")
+			log.Println("PeersNeeded. Querying on background.")
 			// The goroutine will write into the PeersNeededResults channel.
 			go d.GetPeers(needPeers)
 		case node := <-d.handshakeResults:
 			if node != nil {
 				d.nodes[node.id] = node
 				if node.reachable {
-					log.Stderr("reachable:", node.address)
+					log.Println("reachable:", node.address)
 				}
 			} else {
 				// Should never happen.
-				log.Stderr("got a nil at d.RemoteNodeAcquaintance")
+				log.Println("got a nil at d.RemoteNodeAcquaintance")
 			}
 		case <-d.Quit:
-			log.Stderr("Exiting..")
+			log.Println("Exiting..")
 			return
 			//
 			// case needMoreNodes := <-PeersNeeded // (torrent ran out of peers)
@@ -130,7 +130,7 @@ func (d *DhtEngine) GetPeers(peers *InfohashPeers) {
 		break // TODO: decide when to stop, and whether to start returning results earlier.
 	}
 	for k, _ := range peers.nodes {
-		log.Stdoutf("Found TCP torrent peer candidate %q", k)
+		log.Printf("Found TCP torrent peer candidate %q\n", k)
 	}
 	d.PeersNeededResults <- peers
 }

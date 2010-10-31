@@ -80,7 +80,7 @@ func (r *DhtRemoteNode) handshake() {
 	response, err := r.sendMsg(p)
 	// TODO: Move these error checkings to sendMsg. Maybe make a common object.
 	if err != nil {
-		log.Stderr("Handshake error with node", r.address, err.String())
+		log.Println("Handshake error with node", r.address, err.String())
 		return
 	}
 	if response.T == string(t) {
@@ -89,7 +89,7 @@ func (r *DhtRemoteNode) handshake() {
 	} else {
 		// TODO: should try again because they may have responded to a previous query from us.
 		// As it is, only one transaction per remote node may be active, which of course is too restrict.
-		log.Stderrf("wrong transaction id %v, want %v.", response.T, string(t))
+		log.Println("wrong transaction id %v, want %v.", response.T, string(t))
 	}
 	r.localNode.handshakeResults <- r
 }
@@ -106,7 +106,7 @@ func (r *DhtRemoteNode) recursiveGetPeers(infoHash string, count int) (peers map
 		return
 	}
 	if response.T != string(t) {
-		log.Stderrf("wrong transaction id %v, want %v.", response.T, string(t))
+		log.Println("wrong transaction id %v, want %v.", response.T, string(t))
 		return
 	}
 	// Mark node as reachable.
@@ -116,14 +116,14 @@ func (r *DhtRemoteNode) recursiveGetPeers(infoHash string, count int) (peers map
 	if values != nil {
 		// FANTASTIC!!
 		// TODO: can also be a list..
-		log.Stdoutf("GetPeers l=%d ======>>>> FANTASTIC, got VALUES! Thanks %s", count, r.address)
+		log.Printf("GetPeers l=%d ======>>>> FANTASTIC, got VALUES! Thanks %s\b", count, r.address)
 		p := map[string]int{}
 		i := 0
 		for _, n := range values {
 			if len(n) != PEER_CONTACT_LEN {
 				// TODO: Err
-				log.Stderrf("Invalid length of node contact info.")
-				log.Stderrf("Should be == %d, got %d", PEER_CONTACT_LEN, len(n))
+				log.Println("Invalid length of node contact info.")
+				log.Println("Should be == %d, got %d", PEER_CONTACT_LEN, len(n))
 				break
 			}
 			address := binaryToDottedPort(n)
@@ -131,14 +131,14 @@ func (r *DhtRemoteNode) recursiveGetPeers(infoHash string, count int) (peers map
 			p[address] = 0
 			i++
 		}
-		log.Stdoutf("----->>> %+v", p)
+		log.Printf("----->>> %+v\n", p)
 		return p
 	}
 	// Oh noes, got nodes instead. We'll need to recurse.
 	if count == 0 {
 		return nil
 	}
-	log.Stdoutf("GetPeers l=%d => Didn't get peers, but got closer nodes (len=%d)", count, len(response.R.Nodes))
+	log.Printf("GetPeers l=%d => Didn't get peers, but got closer nodes (len=%d)\n", count, len(response.R.Nodes))
 	nodes := response.R.Nodes
 	if nodes == "" {
 		return nil
@@ -160,12 +160,12 @@ func (r *DhtRemoteNode) recursiveGetPeers(infoHash string, count int) (peers map
 
 // The 'nodes' response is a string with fixed length contacts concatenated arbitrarily.
 func parseNodesString(nodes string) (parsed map[string]string) {
-	//log.Stdoutf("nodesString: %x", nodes)
+	//log.Printf("nodesString: %x\n", nodes)
 	parsed = make(map[string]string)
 	if len(nodes)%NODE_CONTACT_LEN > 0 {
 		// TODO: Err
-		log.Stderrf("Invalid length of nodes.")
-		log.Stderrf("Should be a multiple of %d, got %d", NODE_CONTACT_LEN, len(nodes))
+		log.Println("Invalid length of nodes.")
+		log.Println("Should be a multiple of %d, got %d", NODE_CONTACT_LEN, len(nodes))
 		return
 	}
 	// make this a struct instead because we also need to provide the infohash.
@@ -175,7 +175,7 @@ func parseNodesString(nodes string) (parsed map[string]string) {
 		address := binaryToDottedPort(nodes[i+20 : i+26])
 		parsed[id] = address
 	}
-	//log.Stdoutf("parsed: %+v", parsed)
+	//log.Printf("parsed: %+v", parsed)
 	return
 
 }
@@ -222,11 +222,11 @@ type responseType struct {
 // msg should be the bencoded string ready to be sent in the wire.
 func (r *DhtRemoteNode) sendMsg(msg string) (response responseType, err os.Error) {
 	conChan := make(chan net.Conn)
-	//log.Stdoutf("Sending msg %q (len=%d) to %s", msg, len(msg), r.address)
+	//log.Printf("Sending msg %q (len=%d) to %s", msg, len(msg), r.address)
 	go r.dialNode(conChan)
 	c := <-conChan
 	if _, err := c.Write(bytes.NewBufferString(msg).Bytes()); err != nil {
-		log.Stderr("dht node write failed", err.String())
+		log.Println("dht node write failed", err.String())
 		return
 	}
 	// TODO: This is broken. Responses can be delayed and come out of
@@ -258,7 +258,7 @@ func readResponse(c net.Conn) (response responseType, err os.Error) {
 	// The calls to bencode.Unmarshal() can be fragile.
 	defer func() {
 		if x := recover(); x != nil {
-			log.Stderrf("!!! Recovering from panic() after bencode.Unmarshal")
+			log.Println("!!! Recovering from panic() after bencode.Unmarshal")
 		}
 	}()
 
@@ -276,7 +276,7 @@ func readResponse(c net.Conn) (response responseType, err os.Error) {
 		n, err = Buf.ReadFrom(c)
 		if err == nil {
 			// Should never happen, always returns os.EAGAIN at least.
-			log.Stderr("readResponse: got err == nil, which is not expected. This is a bug.")
+			log.Println("readResponse: got err == nil, which is not expected. This is a bug.")
 			continue
 		}
 		if n == 0 {
@@ -288,13 +288,13 @@ func readResponse(c net.Conn) (response responseType, err os.Error) {
 			// case.
 			if e2 := bencode.Unmarshal(bytes.NewBuffer(Buf.Bytes()), &response); e2 == nil {
 				err = nil
-				//log.Stderrf("client=%q, GOOD! unmarshal finished. d=(%q)", c.RemoteAddr(), Buf.String())
+				//log.Println("client=%q, GOOD! unmarshal finished. d=(%q)", c.RemoteAddr(), Buf.String())
 				break
 			} else {
-				log.Stdoutf("DEBUG client=%q, unmarshal error, odd or partial data during UDP read? d=(%q), err=%s", c.RemoteAddr(), Buf.String(), e2.String())
+				log.Printf("DEBUG client=%q, unmarshal error, odd or partial data during UDP read? d=(%q), err=%s", c.RemoteAddr(), Buf.String(), e2.String())
 			}
 		} else {
-			log.Stderrf("readResponse client=%s, Unexpected error: %s", c.RemoteAddr(), e.Error.String())
+			log.Println("readResponse client=%s, Unexpected error: %s", c.RemoteAddr(), e.Error.String())
 		}
 	}
 	return
@@ -310,7 +310,7 @@ func encodeMsg(queryType string, queryArguments map[string]string, transId strin
 	query := structNested{transId, "q", queryType, queryArguments}
 	var b bytes.Buffer
 	if err = bencode.Marshal(&b, query); err != nil {
-		log.Stderr("bencode error: " + err.String())
+		log.Println("bencode error: " + err.String())
 		return
 	}
 	msg = string(b.Bytes())

@@ -62,8 +62,8 @@ func TestDhtBigAndSlow(t *testing.T) {
 	node := startDhtNode(t)
 	realDHTNodes := map[string]string{
 		// DHT test router.
-		"DHT_ROUTER": "dht.cetico.org:9660",
-		//"DHT_ROUTER": "router.bittorrent.com:6881",
+		//"DHT_ROUTER": "dht.cetico.org:9660",
+		"DHT_ROUTER": "router.bittorrent.com:6881",
 		//"DHT_ROUTER": "localhost:33149",
 	}
 	for id, address := range realDHTNodes {
