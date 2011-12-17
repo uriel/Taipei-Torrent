@@ -3,9 +3,9 @@ package taipei
 import (
 	"expvar"
 	"log"
+	"math/rand"
 	"net"
 	"os"
-	"rand"
 	"testing"
 	"time"
 )
@@ -85,7 +85,7 @@ func TestDhtBigAndSlow(t *testing.T) {
 	// make this a ping response instead.
 	//for id, address := range realDHTNodes {
 	for id, _ := range realDHTNodes {
-		_, addrs, _ := net.LookupHost("router.bittorrent.com")
+		_, addrs := net.LookupHost("router.bittorrent.com")
 		candidate := &DhtNodeCandidate{id: id, address: addrs[0] + ":6881"}
 		node.RemoteNodeAcquaintance <- candidate
 	}
@@ -132,5 +132,5 @@ func TestDhtBigAndSlow(t *testing.T) {
 }
 
 func init() {
-	rand.Seed(int64(time.Nanoseconds() % (1e9 - 1)))
+	rand.Seed(int64(time.Now() % (1e9 - 1)))
 }

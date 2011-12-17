@@ -43,12 +43,13 @@
 package taipei
 
 import (
+	"errors"
 	"expvar"
 	"flag"
 	"fmt"
 	"log"
-	"os"
-	"rand"
+
+	"math/rand"
 	"sort"
 )
 
@@ -81,7 +82,7 @@ type DhtEngine struct {
 	PeersRequestResults    chan map[string][]string // key = infohash, v = slice of peers.
 }
 
-func NewDhtNode(nodeId string, port int) (node *DhtEngine, err os.Error) {
+func NewDhtNode(nodeId string, port int) (node *DhtEngine, err error) {
 	node = &DhtEngine{
 		peerID:                 nodeId,
 		port:                   port,
@@ -123,7 +124,7 @@ func (d *DhtEngine) getOrCreateRemoteNode(address string) (r *DhtRemoteNode) {
 	return r
 }
 
-func (d *DhtEngine) ping(address string, async bool) (err os.Error) {
+func (d *DhtEngine) ping(address string, async bool) (err error) {
 	// TODO: should translate to an IP first.
 	r := d.getOrCreateRemoteNode(address)
 	log.Printf("ping => %+v\n", r)
@@ -134,7 +135,7 @@ func (d *DhtEngine) ping(address string, async bool) (err os.Error) {
 	} else {
 		_, err = r.sendMsg(p)
 		if err != nil {
-			log.Println("Handshake error with node", r.address, err.String())
+			log.Println("Handshake error with node", r.address, err.Error())
 		}
 	}
 	return
@@ -200,7 +201,7 @@ func (d *DhtEngine) DoDht() {
 					default:
 						log.Println("Unknown query type:", query.Type)
 					}
-					node.pendingQueries[r.T] = query, false
+					delete(node.pendingQueries, r.T)
 				} else {
 					// DEBUG
 					log.Println("Unknown query id:", r.T)
@@ -245,13 +246,13 @@ func (d *DhtEngine) processGetPeerResults(node *DhtRemoteNode, resp responseType
 
 // Calculates the distance between two hashes. In DHT/Kademlia, "distance" is the XOR of the torrent infohash and the
 // peer node ID.
-func hashDistance(id1 string, id2 string) (distance string, err os.Error) {
+func hashDistance(id1 string, id2 string) (distance string, err error) {
 	d := make([]byte, 20)
 	if id1 == id2 {
-		err = os.NewError("===> Zero distance between identical IDs")
+		err = errors.New("===> Zero distance between identical IDs")
 	}
 	if len(id1) != 20 || len(id2) != 20 {
-		err = os.NewError(fmt.Sprintf("idDistance unexpected id length(s): %d %d", len(id1), len(id2)))
+		err = errors.New(fmt.Sprintf("idDistance unexpected id length(s): %d %d", len(id1), len(id2)))
 	} else {
 		for i := 0; i < 20; i++ {
 			d[i] = id1[i] ^ id2[i]
@@ -332,7 +333,7 @@ func (d *DhtEngine) GetPeers(infoHash string) {
 // Which nodes we contacted.
 var nodesVar = expvar.NewMap("nodes")
 
-func (d *DhtEngine) bootStrapNetwork() os.Error {
+func (d *DhtEngine) bootStrapNetwork() error {
 	return d.ping(dhtRouter, false)
 }
 
