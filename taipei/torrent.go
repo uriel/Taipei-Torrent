@@ -16,7 +16,10 @@ import (
 	"time"
 )
 
-const MAX_PEERS = 60
+const (
+	MAX_PEERS = 60
+	DHT_BIT   = 128
+)
 
 // BitTorrent message types. Sources:
 // http://bittorrent.org/beps/bep_0003.html
@@ -38,11 +41,16 @@ const (
 var port int
 var useUPnP bool
 var fileDir string
+var useDHT bool
+var trackerLessMode bool
 
 func init() {
 	flag.StringVar(&fileDir, "fileDir", ".", "path to directory where files are stored")
 	flag.IntVar(&port, "port", 0, "Port to listen on. Defaults to random.")
 	flag.BoolVar(&useUPnP, "useUPnP", false, "Use UPnP to open port in firewall.")
+	flag.BoolVar(&useDHT, "useDHT", false, "Use DHT to get peers (NOT WORKING).")
+	flag.BoolVar(&trackerLessMode, "trackerLessMode", false, "Do not get peers from the tracker. Good for "+
+		"testing the DHT mode.")
 }
 
 func peerId() string {
@@ -171,6 +179,7 @@ type TorrentSession struct {
 	goodPieces      int
 	activePieces    map[int]*ActivePiece
 	lastHeartBeat   time.Time
+	dht             *DhtEngine
 }
 
 func NewTorrentSession(torrent string) (ts *TorrentSession, err error) {
@@ -220,6 +229,15 @@ func NewTorrentSession(torrent string) (ts *TorrentSession, err error) {
 		left = left - t.m.Info.PieceLength + int64(t.lastPieceLength)
 	}
 	t.si = &SessionInfo{PeerId: peerId(), Port: listenPort, Left: left}
+	// TODO: Don't use DHT if torrent is private. 
+	if useDHT {
+		// TODO: UPnP UDP port mapping.
+		if t.dht, err = NewDhtNode(t.si.PeerId, listenPort); err != nil {
+			log.Println("DHT node creation error", err.String())
+			return
+		}
+		go t.dht.DoDht()
+	}
 	return t, err
 }
 
@@ -272,6 +290,7 @@ func (t *TorrentSession) AddPeer(conn net.Conn) {
 	ps.address = peer
 	var header [68]byte
 	copy(header[0:], kBitTorrentHeader[0:])
+	// TODO: Announce DHT support when we're ready.
 	copy(header[28:48], string2Bytes(t.m.InfoHash))
 	copy(header[48:68], string2Bytes(t.si.PeerId))
 
@@ -312,38 +331,61 @@ func (t *TorrentSession) DoTorrent() (err error) {
 	t.trackerInfoChan = make(chan *TrackerResponse)
 
 	conChan := make(chan net.Conn)
-
 	go listenForPeerConnections(t.si.Port, conChan)
+
+	DhtPeersRequestResults := make(chan map[string][]string)
+	if useDHT {
+		DhtPeersRequestResults = t.dht.PeersRequestResults
+		t.dht.PeersRequest <- t.m.InfoHash
+	}
 
 	t.fetchTrackerInfo("started")
 
 	for {
 		select {
 		case _ = <-retrackerChan:
-			t.fetchTrackerInfo("")
+			if !trackerLessMode {
+				t.fetchTrackerInfo("")
+			}
+		case dhtInfoHashPeers := <-DhtPeersRequestResults:
+			newPeerCount := 0
+			// key = infoHash. The torrent client currently only
+			// supports one download at a time, so let's assume
+			// it's the case.
+			for _, peers := range dhtInfoHashPeers {
+				for _, peer := range peers {
+					peer = binaryToDottedPort(peer)
+					if _, ok := t.peers[peer]; !ok {
+						newPeerCount++
+						go connectToPeer(peer, conChan)
+					}
+				}
+			}
+			log.Println("Contacting", newPeerCount, "new peers (thanks DHT!!)")
 		case ti := <-t.trackerInfoChan:
 			t.ti = ti
 			log.Println("Torrent has", t.ti.Complete, "seeders and", t.ti.Incomplete, "leachers.")
-			peers := t.ti.Peers
-			log.Println("Tracker gave us", len(peers)/6, "peers")
-			newPeerCount := 0
-			for i := 0; i < len(peers); i += 6 {
-				peer := binaryToDottedPort(peers[i : i+6])
-				if _, ok := t.peers[peer]; !ok {
-					newPeerCount++
-					go connectToPeer(peer, conChan)
+			if !trackerLessMode {
+				peers := t.ti.Peers
+				log.Println("Tracker gave us", len(peers)/6, "peers")
+				newPeerCount := 0
+				for i := 0; i < len(peers); i += 6 {
+					peer := binaryToDottedPort(peers[i : i+6])
+					if _, ok := t.peers[peer]; !ok {
+						newPeerCount++
+						go connectToPeer(peer, conChan)
+					}
 				}
+				log.Println("Contacting", newPeerCount, "new peers")
+				interval := t.ti.Interval
+				if interval < 120 {
+					interval = 120
+				} else if interval > 24*3600 {
+					interval = 24 * 3600
+				}
+				log.Println("..checking again in", interval.String())
+				retrackerChan = time.Tick(interval * time.Second)
 			}
-			log.Println("Contacting", newPeerCount, "new peers")
-			interval := t.ti.Interval
-			if interval < 120 {
-				interval = 120
-			} else if interval > 24*3600 {
-				interval = 24 * 3600
-			}
-			log.Println("..checking again in", interval.String())
-			retrackerChan = time.Tick(interval * time.Second)
-
 		case pm := <-t.peerMessageChan:
 			peer, message := pm.peer, pm.message
 			peer.lastReadTime = time.Now()
@@ -368,7 +410,12 @@ func (t *TorrentSession) DoTorrent() (err error) {
 			// TODO: Remove this hack when we support DHT and/or PEX
 			// In a large well-seeded swarm, try to maintain a reasonable number of peers.
 			if len(t.peers) < 15 && t.goodPieces < t.totalPieces && (t.ti == nil || t.ti.Complete > 100) {
-				t.fetchTrackerInfo("")
+				if useDHT {
+					// risk of deadlock.
+					t.dht.PeersRequest <- t.m.InfoHash
+				} else {
+					t.fetchTrackerInfo("")
+				}
 			}
 		case _ = <-keepAliveChan:
 			now := time.Now()
@@ -591,6 +638,16 @@ func (t *TorrentSession) DoMessage(p *peerState, message []byte) (err error) {
 	}
 	if len(p.id) == 0 {
 		// This is the header message from the peer.
+		if useDHT {
+			// If 128, then it supports DHT.
+			if int(message[0])&DHT_BIT == DHT_BIT {
+				candidate := &DhtNodeCandidate{id: p.id, address: p.address}
+				// It's OK if we know this node already. The DHT engine will
+				// ignore it accordingly.
+				t.dht.RemoteNodeAcquaintance <- candidate
+			}
+		}
+
 		peersInfoHash := string(message[8:28])
 		if peersInfoHash != t.m.InfoHash {
 			return errors.New("this peer doesn't have the right info hash")
