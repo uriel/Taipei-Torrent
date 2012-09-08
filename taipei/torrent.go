@@ -445,13 +445,13 @@ func (t *TorrentSession) DoTorrent() (err error) {
 		case _ = <-rechokeChan:
 			// TODO: recalculate who to choke / unchoke
 			t.lastHeartBeat = time.Now()
-			ratio := float64(0.0)
+			ratio := 0.0
 			if t.si.Downloaded > 0 {
 				ratio = float64(t.si.Uploaded) / float64(t.si.Downloaded)
 			}
-			log.Println("Peers:", len(t.peers), "downloaded:", t.si.Downloaded,
-				"uploaded:", t.si.Uploaded, "ratio", ratio)
-			log.Println("good, total", t.goodPieces, t.totalPieces)
+			log.Println("Peers:", len(t.peers), "Pieces(good/total):", 
+				t.goodPieces,"/",t.totalPieces ,"Up:", t.si.Downloaded,
+				"Down:", t.si.Uploaded, "Ratio:", ratio)
 			if len(t.peers) < TARGET_NUM_PEERS && t.goodPieces < t.totalPieces {
 				if t.m.Info.Private != 1 && useDHT {
 					go t.dht.PeersRequest(t.m.InfoHash, true)
