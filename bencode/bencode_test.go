@@ -232,8 +232,6 @@ type structA struct {
 	B string "b"
 }
 
-// TODO: make this test pass.
-
 func TestUnmarshal(t *testing.T) {
 	type structNested struct {
 		T string            "t"
